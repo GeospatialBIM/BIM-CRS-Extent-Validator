@@ -23,6 +23,9 @@ and writes structured JSON output.
 import os
 import json
 from datetime import datetime
+from pyproj import CRS
+from pyproj.exceptions import CRSError
+from pyproj import Transformer
 
 # Optional pyproj for reprojection diagnostics
 try:
@@ -60,6 +63,88 @@ CRS_BOUNDS = {
     },
 }
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Auto‑load CRS bounds
+# ──────────────────────────────────────────────────────────────────────────────
+
+from pyproj import CRS
+from pyproj.exceptions import CRSError
+
+def load_crs_bounds(epsg_code):
+    try:
+        crs = CRS.from_epsg(epsg_code)
+    except CRSError:
+        return None
+
+    area = crs.area_of_use
+    axis_info = crs.axis_info
+
+    auth = crs.to_authority()
+    authority = auth[0] if auth else None
+
+    return {
+        "type": "Projected" if crs.is_projected else "Geographic",
+        "unit": axis_info[0].unit_name if axis_info else None,
+        "LonMin": area.west,
+        "LatMin": area.south,
+        "LonMax": area.east,
+        "LatMax": area.north,
+        "name": area.name,
+        "authority": authority,
+    }
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Project bounds when CRS is projected
+# ──────────────────────────────────────────────────────────────────────────────   
+    
+def geographic_bounds_to_projected(epsg_code, bounds):
+    """
+    Convert geographic Area of Use bounds into projected CRS space.
+    """
+    transformer = Transformer.from_crs(
+        "EPSG:4326", f"EPSG:{epsg_code}", always_xy=True
+    )
+
+    corners = [
+        (bounds["LonMin"], bounds["LatMin"]),
+        (bounds["LonMin"], bounds["LatMax"]),
+        (bounds["LonMax"], bounds["LatMin"]),
+        (bounds["LonMax"], bounds["LatMax"]),
+    ]
+
+    xs, ys = [], []
+    for lon, lat in corners:
+        x, y = transformer.transform(lon, lat)
+        xs.append(x)
+        ys.append(y)
+
+    return min(xs), min(ys), max(xs), max(ys)
+    
+# ──────────────────────────────────────────────────────────────────────────────
+# EPSG from WKT
+# ──────────────────────────────────────────────────────────────────────────────
+    
+def infer_epsg_from_wkt(wkt):
+    """
+    Attempt to infer EPSG code from WKT definition.
+    Returns EPSG integer or None.
+    """
+    if not wkt:
+        return None
+
+    try:
+        crs = CRS.from_wkt(wkt)
+    except CRSError:
+        return None
+
+    auth = crs.to_authority()
+    if auth and auth[0] == "EPSG":
+        try:
+            return int(auth[1])
+        except ValueError:
+            return None
+
+    return None
 
 # ──────────────────────────────────────────────────────────────────────────────
 # TXT Report Parser (MATCHES YOUR FILE EXACTLY)
@@ -100,6 +185,7 @@ def parse_bim_report(txt_path):
                 "DataType": "DataType",
                 "Georeference Status": "Georeference_Status",
                 "SpatialReference": "SpatialReference",
+                "SpatialReference WKT": "SpatialReference_WKT",
                 "ExteriorShell Extent (XMin)": "XMin",
                 "ExteriorShell Extent (YMin)": "YMin",
                 "ExteriorShell Extent (XMax)": "XMax",
@@ -128,73 +214,104 @@ def parse_bim_report(txt_path):
 
 def validate_extent(rec):
     sr = rec.get("SpatialReference")
-    xmin, ymin, xmax, ymax = rec.get("XMin"), rec.get("YMin"), rec.get("XMax"), rec.get("YMax")
+    wkt = rec.get("SpatialReference_WKT")
 
+    xmin = rec.get("XMin")
+    ymin = rec.get("YMin")
+    xmax = rec.get("XMax")
+    ymax = rec.get("YMax")
+
+    # Initialize result FIRST
     result = {
         "BIM_File": rec.get("BIM_File"),
         "Declared_SpatialReference": sr,
         "EPSG": None,
         "CRS_Type": None,
         "Unit": None,
+        "CRS_AreaOfUse": None,
         "Extent_Status": None,
-        "SR_Mismatch": False,
-        "Diagnostics": []
+        "Diagnostics": [],
     }
 
+    # 1) Try ESRI name → EPSG
     epsg = ESRI_TO_EPSG.get(sr)
-    if epsg is None:
-        result["Extent_Status"] = "UNKNOWN_SPATIAL_REFERENCE"
-        result["Diagnostics"].append("SpatialReference not mapped to EPSG.")
+
+    # 2) Fallback: infer EPSG from WKT
+    if epsg is None and wkt:
+        epsg = infer_epsg_from_wkt(wkt)
+        if epsg:
+            result["Diagnostics"].append(
+                f"EPSG inferred from WKT definition (EPSG:{epsg})."
+            )
+
+    # 3) Fail cleanly if CRS unresolved
+    if not epsg:
+        result["Extent_Status"] = "UNKNOWN_CRS"
+        result["Diagnostics"].append(
+            "Unable to resolve CRS via ESRI name or WKT."
+        )
         return result
 
-    bounds = CRS_BOUNDS[epsg]
+    # 4) Load CRS bounds from EPSG registry
+    bounds = load_crs_bounds(epsg)
+    if not bounds:
+        result["Extent_Status"] = "UNKNOWN_EPSG"
+        result["Diagnostics"].append(
+            "Unable to load CRS bounds from EPSG registry."
+        )
+        return result
+
     result["EPSG"] = epsg
     result["CRS_Type"] = bounds["type"]
     result["Unit"] = bounds["unit"]
+    result["CRS_AreaOfUse"] = bounds["name"]
 
-    inside = (
-        bounds["XMin"] <= xmin <= bounds["XMax"] and
-        bounds["XMin"] <= xmax <= bounds["XMax"] and
-        bounds["YMin"] <= ymin <= bounds["YMax"] and
-        bounds["YMin"] <= ymax <= bounds["YMax"]
-    )
-
-    # CRS mismatch heuristic
+    # 5) Validate extents
     if bounds["type"] == "Geographic":
-        if abs(xmin) > 360 or abs(ymin) > 90:
-            result["SR_Mismatch"] = True
-            result["Extent_Status"] = "SR_MISMATCH"
-            result["Diagnostics"].append(
-                "Geographic CRS declared but extents are metric (UTM-like)."
-            )
-
-            if PYPROJ_AVAILABLE:
-                try:
-                    t = Transformer.from_crs(25831, 4258, always_xy=True)
-                    lon, lat = t.transform((xmin + xmax) / 2, (ymin + ymax) / 2)
-                    result["Diagnostics"].append(
-                        f"Reprojected as EPSG:25831 → center ≈ ({lon:.5f}°, {lat:.5f}°)"
-                    )
-                except Exception:
-                    pass
-
-            return result
+        inside = (
+            bounds["LonMin"] <= xmin <= bounds["LonMax"]
+            and bounds["LonMin"] <= xmax <= bounds["LonMax"]
+            and bounds["LatMin"] <= ymin <= bounds["LatMax"]
+            and bounds["LatMin"] <= ymax <= bounds["LatMax"]
+        )
+    else:
+        pxmin, pymin, pxmax, pymax = geographic_bounds_to_projected(epsg, bounds)
+        inside = (
+            pxmin <= xmin <= pxmax
+            and pxmin <= xmax <= pxmax
+            and pymin <= ymin <= pymax
+            and pymin <= ymax <= pymax
+        )
 
     result["Extent_Status"] = "INSIDE" if inside else "OUTSIDE"
 
     if not inside:
-        result["Diagnostics"].append("Extent outside valid CRS domain.")
+        result["Diagnostics"].append(
+            "Extent outside CRS Area of Use."
+        )
 
     return result
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Main
 # ──────────────────────────────────────────────────────────────────────────────
 
-def main():
+def main(report_path=None):
     print("\n=== BIM GEOREFERENCING VALIDATION ===\n")
-    report_path = input("Path to BIM report (.txt): ").strip()
+
+    if report_path is None:
+        report_path = (
+            input("Path to BIM report (.txt): ")
+            .strip()
+            .strip('"')
+            .strip("'")
+        )
+
+    if not report_path:
+        raise ValueError("No report path provided.")
+
+    if not os.path.exists(report_path):
+        raise FileNotFoundError(f"Input report not found: {report_path}")
 
     records = parse_bim_report(report_path)
     print(f"Parsed {len(records)} BIM records.")
@@ -205,9 +322,9 @@ def main():
         "metadata": {
             "source_report": report_path,
             "generated_on": datetime.now().isoformat(),
-            "record_count": len(results)
+            "record_count": len(results),
         },
-        "results": results
+        "results": results,
     }
 
     output_path = os.path.splitext(report_path)[0] + "_validation.json"
@@ -216,9 +333,6 @@ def main():
         json.dump(output, f, indent=2)
 
     print(f"\n✅ JSON report written to:\n{output_path}")
-
-
+    
 if __name__ == "__main__":
     main()
-
-
