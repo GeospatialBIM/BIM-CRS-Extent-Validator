@@ -8,6 +8,14 @@ The script parses an ArcGIS Pro BIM georeferencing report (`.txt`), checks wheth
 
 ---
 
+## Requirements
+
+Python 3.6+
+
+Optional: pyproj (for reprojection diagnostics)
+
+---
+
 ## What This Tool Solves
 
 BIM data often appears *georeferenced* but may:
@@ -47,6 +55,23 @@ A JSON file with:
 - Extent validity (`INSIDE`, `OUTSIDE`, `SR_MISMATCH`, `UNKNOWN`)
 - Diagnostics and warnings
 
+---
+
+## License
+
+MIT License
+
+Copyright (c) 2026
+
+Permission is hereby granted, free of charge, to any person obtaining a copy...
+
+---
+
+## Notes & Disclaimer
+
+The report only shows the Spatial Reference (CRS) and extent recorded in the file.
+The data author or vendor must ensure that the georeferenced data is correct, complete, and aligned with real‑world coordinates.
+
 Example:
 
 ```json
@@ -56,3 +81,5 @@ Example:
     "Geographic CRS declared but extents are metric (UTM-like)."
   ]
 }
+
+
