@@ -32,7 +32,7 @@ This tool **flags those issues automatically** before the data is consumed in GI
 
 ## Input
 
-- ArcGIS Pro BIM Georeferencing Report (`.txt`)
+- ArcGIS Pro BIM Georeferencing Report (`.txt`) https://github.com/GeospatialBIM/CRS_Extent
 - Typically generated when inspecting BIM / IFC layers in ArcGIS Pro
 
 ---
