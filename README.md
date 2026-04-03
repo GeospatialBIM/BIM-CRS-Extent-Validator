@@ -1,97 +1,73 @@
-# BIM CRS Extent Validator
+# BIM Georeferencing Validation
 
-A lightweight Python utility that validates BIM model extents against their declared Coordinate Reference System (CRS).
-
-The script parses an ArcGIS Pro BIM georeferencing report (`.txt`), checks whether spatial extents fall within valid EPSG domain bounds, detects CRS mismatches, and outputs a structured JSON validation report.
-
-**`The report is genearated from this script https://github.com/GeospatialBIM/CRS_Extent`**
+**Spatial Reference & Extent Validation for BIM (IFC / Revit) Reports**
 
 ---
 
-## Requirements
+## Overview
 
-- **ArcGIS Pro** (3.6 recommended)
-- **Python 3.x** (installed with ArcGIS Pro)
-- **ArcPy** (comes with ArcGIS Pro)
+This repository contains a Python utility that inspects and validates **BIM georeferencing metadata** as reported by ArcGIS Pro (or similar tools).
 
-**Optional:** pyproj (for reprojection diagnostics)
-
----
-
-## What This Tool Solves
-
-BIM data often appears *georeferenced* but may:
-- Use the wrong CRS declaration
-- Contain UTM coordinates declared as geographic (or vice‑versa)
-- Fall outside valid EPSG domain extents
-- Be un‑georeferenced or incorrectly shifted
-
-This tool **flags those issues automatically** before the data is consumed in GIS workflows.
-
----
-
-## Features
-
-✅ Parses ArcGIS BIM georeferencing reports  
-✅ Maps ESRI spatial references to EPSG codes  
-✅ Validates extents against EPSG domain bounds  
-✅ Detects CRS mismatches (degrees vs meters)  
-✅ Optional reprojection diagnostics (via `pyproj`)  
-✅ Outputs clean, structured JSON  
-✅ Works across multiple BIM files in a single report  
-
----
-
-## Input
-
-- ArcGIS Pro BIM Georeferencing Report (`.txt`) https://github.com/GeospatialBIM/CRS_Extent
-- Typically generated when inspecting BIM / IFC layers in ArcGIS Pro
-
----
-
-## Output
-
-A JSON file with:
-- Source metadata
-- Spatial reference details
-- Extent validity (`INSIDE`, `OUTSIDE`, `SR_MISMATCH`, `UNKNOWN`)
-- Diagnostics and warnings
-
----
-
-## License
-
-MIT License
-
-Copyright (c) 2026
-
-Permission is hereby granted, free of charge, to any person obtaining a copy...
+The script checks whether the recorded **coordinate reference system (CRS)** and **model extents** fall within the valid **EPSG Area of Use** for the declared CRS. It supports both **projected and geographic coordinate systems** and produces a structured JSON report suitable for QA workflows.
 
 ---
 
 ## Disclaimer
 
-This tool validates only the **spatial reference (CRS) and coordinate extents explicitly recorded in the input BIM file or report**.
+**This tool validates only what is recorded in the file.**
 
-The results do **not** guarantee that the BIM data is correctly georeferenced in real‑world space.  
-Incorrect origins, offsets, rotations, unit assumptions, or authoring‑tool errors may still exist even if extents appear valid.
+It does **NOT** verify:
+- Real‑world alignment
+- Survey accuracy
+- Authoring intent
+- Correctness of transformations applied in upstream software
 
-It is the responsibility of the **data author, vendor, or data owner** to ensure that the BIM data is:
-- Correctly georeferenced
-- Aligned with the intended coordinate reference system
-- Suitable for downstream GIS, engineering, or asset‑management workflows
+Passing validation indicates that *recorded extents* fall within the expected CRS domain — **not** that the BIM model is correctly georeferenced in reality.
 
-This tool should be used as a **diagnostic aid**, not as authoritative geospatial validation.
+The data producer remains responsible for spatial correctness.
 
+---
 
-Example:
+## Features
+
+- Parses BIM georeferencing reports (`.txt`)
+- Resolves CRS using:
+  - ESRI spatial reference names
+  - Automatic EPSG inference from WKT (fallback)
+- Dynamically loads CRS **Area of Use** from the EPSG registry
+- Validates extents against CRS domain
+- Supports projected and geographic CRSs
+- Outputs structured JSON results with diagnostics
+
+---
+
+## Input
+
+A plain‑text BIM georeferencing report (typically from ArcGIS Pro) containing fields such as:
+
+- `BIM File`
+- `SpatialReference`
+- `SpatialReference WKT` (optional)
+- `ExteriorShell Extent (XMin, YMin, XMax, YMax, ZMin, ZMax)`
+
+---
+
+## Output
+
+A JSON file written alongside the input report:
+
+### Example Output
 
 ```json
 {
-  "Extent_Status": "SR_MISMATCH",
+  "BIM_File": "bridge.ifc",
+  "Declared_SpatialReference": "ETRS_1989_UTM_Zone_31N",
+  "EPSG": 25831,
+  "CRS_Type": "Projected",
+  "Unit": "metre",
+  "CRS_AreaOfUse": "Between 0°E and 6°E, northern hemisphere",
+  "Extent_Status": "INSIDE",
   "Diagnostics": [
-    "Geographic CRS declared but extents are metric (UTM-like)."
+    "EPSG inferred from WKT definition (EPSG:25831)."
   ]
 }
-
-
