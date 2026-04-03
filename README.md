@@ -10,9 +10,10 @@ The script parses an ArcGIS Pro BIM georeferencing report (`.txt`), checks wheth
 
 ## Requirements
 
-Python 3.6+
+- ArcGIS Pro 3.6+
+- Python 3.8+
 
-Optional: pyproj (for reprojection diagnostics)
+**Optional:** pyproj (for reprojection diagnostics)
 
 ---
 
