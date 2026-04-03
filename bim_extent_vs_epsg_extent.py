@@ -1,4 +1,17 @@
 """
+DISCLAIMER:
+-----------
+This script inspects and validates only the spatial reference and coordinate
+extents recorded in a BIM georeferencing report.
+
+It does NOT verify real-world alignment, survey accuracy, authoring intent,
+nor correctness of transformations applied in upstream software.
+
+Passing validation indicates that recorded extents fall within expected CRS
+domains — not that the BIM model is correctly georeferenced.
+
+The data producer remains responsible for ensuring spatial correctness.
+
 BIM Georeferencing Validation (TXT → JSON)
 ------------------------------------------
 Parses an ArcGIS BIM georeferencing report (.txt),
