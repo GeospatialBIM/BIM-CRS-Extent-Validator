@@ -4,6 +4,8 @@ A lightweight Python utility that validates BIM model extents against their decl
 
 The script parses an ArcGIS Pro BIM georeferencing report (`.txt`), checks whether spatial extents fall within valid EPSG domain bounds, detects CRS mismatches, and outputs a structured JSON validation report.
 
+**`The report is genearated from this script https://github.com/GeospatialBIM/CRS_Extent`**
+
 ---
 
 ## What This Tool Solves
