@@ -196,26 +196,8 @@ def main():
     print("\n=== BIM GEOREFERENCING VALIDATION ===\n")
     report_path = input("Path to BIM report (.txt): ").strip()
 
-    # ── Input validation ────────────────────────────────────────────────────
-    if not os.path.isfile(report_path):
-        print("\n❌ ERROR: Input report not found.")
-        print(f"   Path provided: {report_path}")
-        print("   Please verify the file exists and try again.\n")
-        return
-
-    try:
-        records = parse_bim_report(report_path)
-    except Exception as e:
-        print("\n❌ ERROR: Failed to read or parse the report.")
-        print(f"   Reason: {e}\n")
-        return
-
-    if not records:
-        print("\n⚠️ WARNING: No BIM records were found in the report.")
-        print("   The file may be empty or not in the expected format.\n")
-        return
-
-    print(f"Parsed {len(records)} BIM records.\n")
+    records = parse_bim_report(report_path)
+    print(f"Parsed {len(records)} BIM records.")
 
     results = [validate_extent(r) for r in records]
 
@@ -223,20 +205,20 @@ def main():
         "metadata": {
             "source_report": report_path,
             "generated_on": datetime.now().isoformat(),
-            "record_count": len(results),
+            "record_count": len(results)
         },
-        "results": results,
+        "results": results
     }
 
     output_path = os.path.splitext(report_path)[0] + "_validation.json"
 
-    try:
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(output, f, indent=2)
-    except Exception as e:
-        print("\n❌ ERROR: Failed to write output JSON.")
-        print(f"   Reason: {e}\n")
-        return
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2)
 
-    print(f"✅ Validation complete.")
-    print(f"✅ JSON report written to:\n{output_path}\n")
+    print(f"\n✅ JSON report written to:\n{output_path}")
+
+
+if __name__ == "__main__":
+    main()
+
+
