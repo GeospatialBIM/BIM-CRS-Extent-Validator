@@ -69,10 +69,20 @@ Permission is hereby granted, free of charge, to any person obtaining a copy...
 
 ---
 
-## Notes & Disclaimer
+## Disclaimer
 
-The report only shows the Spatial Reference (CRS) and extent recorded in the file.
-The data author or vendor must ensure that the georeferenced data is correct, complete, and aligned with real‑world coordinates.
+This tool validates only the **spatial reference (CRS) and coordinate extents explicitly recorded in the input BIM file or report**.
+
+The results do **not** guarantee that the BIM data is correctly georeferenced in real‑world space.  
+Incorrect origins, offsets, rotations, unit assumptions, or authoring‑tool errors may still exist even if extents appear valid.
+
+It is the responsibility of the **data author, vendor, or data owner** to ensure that the BIM data is:
+- Correctly georeferenced
+- Aligned with the intended coordinate reference system
+- Suitable for downstream GIS, engineering, or asset‑management workflows
+
+This tool should be used as a **diagnostic aid**, not as authoritative geospatial validation.
+
 
 Example:
 
